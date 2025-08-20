@@ -10,7 +10,6 @@ use Cake\Console\ConsoleOptionParser;
 use Cake\Core\App;
 use Cake\Core\Configure;
 use Cake\Core\Plugin;
-use Cake\Utility\Hash;
 use Cake\Utility\Inflector;
 
 class I18nExtractCommand extends CakeI18nExtractCommand
@@ -24,6 +23,12 @@ class I18nExtractCommand extends CakeI18nExtractCommand
 
     /** @var bool */
     protected bool $_relativePaths = false;
+
+    public function initialize(): void
+    {
+        $this->_model = $this->getTableLocator()->get(static::DEFAULT_MODEL);
+    }
+
 
     public static function defaultName(): string
     {
@@ -108,7 +113,7 @@ class I18nExtractCommand extends CakeI18nExtractCommand
             $this->_searchFiles();
         }
 
-        // Call parent extract method
+        // Call parent extract method (this triggers _addMessage internally)
         $this->_extract($args, $io);
 
         return static::CODE_SUCCESS;
@@ -116,14 +121,6 @@ class I18nExtractCommand extends CakeI18nExtractCommand
 
     /**
      * Save extracted message to DB
-     *
-     * @param string $domain
-     * @param string $singular
-     * @param string|null $plural
-     * @param string|null $context
-     * @param string|null $refs
-     * @param ConsoleIo|null $io
-     * @return void
      */
     protected function _save(
         string $domain,
@@ -164,46 +161,86 @@ class I18nExtractCommand extends CakeI18nExtractCommand
         }
     }
 
+   protected function _collectMessages(): array
+{
+    $messages = [];
+
+    foreach ($this->_files as $file) {
+        $content = file_get_contents($file);
+        if (!$content) {
+            continue;
+        }
+
+        // Match __('text'), __n('singular', 'plural', ...), etc.
+        preg_match_all('/__\(\s*[\'"](.*?)[\'"]/', $content, $matches);
+        foreach ($matches[1] as $msg) {
+            $messages[] = [
+                'domain' => 'default',
+                'singular' => $msg,
+                'plural' => null,
+                'context' => null,
+                'refs' => $file,
+            ];
+        }
+    }
+
+    return $messages;
+}
+
+
     public function buildOptionParser(ConsoleOptionParser $parser): ConsoleOptionParser
     {
         $parser->setDescription(
             'Extract translated strings from application source files. ' .
             'Source files are parsed and string literal format strings ' .
             'provided to the <info>__</info> family of functions are extracted.'
-        )->addOption('model', [
+        )
+        ->addOption('model', [
             'help' => 'Model to use for storing messages. Defaults to: ' . static::DEFAULT_MODEL,
-        ])->addOption('languages', [
+        ])
+        ->addOption('languages', [
             'help' => 'Comma separated list of languages used by app. Defaults used from `I18n.languages` config.',
-        ])->addOption('app', [
+        ])
+        ->addOption('app', [
             'help' => 'Directory where your application is located.',
-        ])->addOption('paths', [
+        ])
+        ->addOption('paths', [
             'help' => 'Comma separated list of paths that are searched for source files.',
-        ])->addOption('merge', [
+        ])
+        ->addOption('merge', [
             'help' => 'Merge all domain strings into a single `default` domain.',
             'default' => 'no',
             'choices' => ['yes', 'no'],
-        ])->addOption('relative-paths', [
+        ])
+        ->addOption('relative-paths', [
             'help' => 'Use application relative paths in references.',
             'boolean' => true,
             'default' => false,
-        ])->addOption('files', [
+        ])
+        ->addOption('files', [
             'help' => 'Comma separated list of files to parse.',
-        ])->addOption('exclude-plugins', [
+        ])
+        ->addOption('exclude-plugins', [
             'boolean' => true,
             'default' => true,
             'help' => 'Ignores all files in plugins if this command is run inside from the same app directory.',
-        ])->addOption('plugin', [
+        ])
+        ->addOption('plugin', [
             'help' => 'Extracts tokens only from the plugin specified and puts the result in the plugin\'s Locale directory.',
-        ])->addOption('exclude', [
+        ])
+        ->addOption('exclude', [
             'help' => 'Comma separated list of directories to exclude.',
-        ])->addOption('extract-core', [
+        ])
+        ->addOption('extract-core', [
             'help' => 'Extract messages from the CakePHP core libraries.',
             'choices' => ['yes', 'no'],
-        ])->addOption('no-location', [
+        ])
+        ->addOption('no-location', [
             'boolean' => true,
             'default' => false,
             'help' => 'Do not write file locations for each extracted message.',
-        ])->addOption('marker-error', [
+        ])
+        ->addOption('marker-error', [
             'boolean' => true,
             'default' => false,
             'help' => 'Do not display marker error.',
@@ -211,4 +248,24 @@ class I18nExtractCommand extends CakeI18nExtractCommand
 
         return $parser;
     }
+
+    protected function _extract(Arguments $args, ConsoleIo $io): void
+{
+    $messages = $this->_collectMessages();
+
+    foreach ($messages as $message) {
+        $this->_save(
+            $message['domain'],
+            $message['singular'],
+            $message['plural'],
+            $message['context'],
+            $message['refs'],
+            $io
+        );
+    }
+
+    // Still call parent to generate .pot files
+    parent::_extract($args, $io);
+}
+
 }
