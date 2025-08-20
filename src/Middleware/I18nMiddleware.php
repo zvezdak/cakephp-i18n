@@ -41,7 +41,7 @@ class I18nMiddleware implements MiddlewareInterface
     /**
      * Closure for deciding whether or not to ignore particular request.
      *
-     * Request will not be processd if the callback returns `true`.
+     * Request will not be processed if the callback returns `true`.
      *
      * @var \Closure|null
      */
@@ -63,7 +63,7 @@ class I18nMiddleware implements MiddlewareInterface
     }
 
     /**
-     * Sets appropriate locale and lang to I18n::locale() and App.language config
+     * Sets appropriate locale and lang to I18n::setLocale() and App.language config
      * respectively based on "lang" request param.
      *
      * @param \Psr\Http\Message\ServerRequestInterface $request The request.
@@ -74,7 +74,7 @@ class I18nMiddleware implements MiddlewareInterface
     {
         if (
             $this->_ignoreRequestCallback !== null
-            && call_user_func($this->_ignoreRequestCallback, $request) === true
+            && ($this->_ignoreRequestCallback)($request) === true
         ) {
             return $handler->handle($request);
         }
@@ -82,7 +82,7 @@ class I18nMiddleware implements MiddlewareInterface
         $config = $this->getConfig();
 
         /** @var \Cake\Http\ServerRequest $request */
-        if ($request->getPath() === '/') {
+        if ($request->getUri()->getPath() === '/') {
             $statusCode = 301;
             $lang = $config['defaultLanguage'];
             if ($config['detectLanguage']) {
@@ -113,12 +113,12 @@ class I18nMiddleware implements MiddlewareInterface
     /**
      * Set closure for deciding whether or not to ignore particular request.
      *
-     * Request will not be processd if the callback returns `true`.
+     * Request will not be processed if the callback returns `true`.
      *
      * @param \Closure $callback A callback.
      * @return $this
      */
-    public function ignoreRequestCallback(Closure $callback)
+    public function ignoreRequestCallback(Closure $callback): static
     {
         $this->_ignoreRequestCallback = $callback;
 
@@ -138,11 +138,7 @@ class I18nMiddleware implements MiddlewareInterface
      */
     public function detectLanguage(ServerRequest $request, ?string $default = null): string
     {
-        if (!$default) {
-            $lang = $this->_config['defaultLanguage'];
-        } else {
-            $lang = $default;
-        }
+        $lang = $default ?? $this->_config['defaultLanguage'];
 
         /** @var array $browserLangs */
         $browserLangs = $request->acceptLanguage();

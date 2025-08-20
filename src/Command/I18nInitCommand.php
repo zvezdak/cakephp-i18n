@@ -7,6 +7,7 @@ use Cake\Command\I18nInitCommand as CakeI18nInitCommand;
 use Cake\Console\Arguments;
 use Cake\Console\ConsoleIo;
 use Cake\Console\ConsoleOptionParser;
+use Cake\Console\CommandInterface;
 
 /**
  * Command for interactive I18N management.
@@ -21,13 +22,6 @@ class I18nInitCommand extends CakeI18nInitCommand
     public const DEFAULT_MODEL = 'I18nMessages';
 
     /**
-     * The name of this command.
-     *
-     * @var string
-     */
-    protected string $name = 'admad/i18n init';
-
-    /**
      * @inheritDoc
      */
     public static function defaultName(): string
@@ -40,9 +34,9 @@ class I18nInitCommand extends CakeI18nInitCommand
      *
      * @param \Cake\Console\Arguments $args The command arguments.
      * @param \Cake\Console\ConsoleIo $io The console io
-     * @return int|null The exit code or null for success
+     * @return int The exit code
      */
-    public function execute(Arguments $args, ConsoleIo $io): ?int
+    public function execute(Arguments $args, ConsoleIo $io): int
     {
         $language = $args->getArgument('language');
         if (!$language) {
@@ -51,17 +45,20 @@ class I18nInitCommand extends CakeI18nInitCommand
         if (strlen($language) < 2) {
             $io->err('Invalid language code. Valid are `en`, `eng`, `en_US` etc.');
 
-            return static::CODE_ERROR;
+            return CommandInterface::CODE_ERROR;
         }
 
         $model = $this->_loadModel($args);
         $messages = $model->find()
             ->select(['domain', 'singular', 'plural', 'context'])
             ->distinct()
-            ->disableHydration()
+            ->disableHydration(true)
             ->toArray();
 
-        $entities = $model->newEntities($messages);
+        $entities = [];
+        foreach ($messages as $message) {
+            $entities[] = $model->newEntity($message);
+        }
 
         $return = $model->getConnection()->transactional(
             function () use ($model, $entities, $language) {
@@ -75,6 +72,7 @@ class I18nInitCommand extends CakeI18nInitCommand
                         return false;
                     }
                 }
+                return true;
             }
         );
 
@@ -84,7 +82,7 @@ class I18nInitCommand extends CakeI18nInitCommand
             $io->out('Unable to create messages for "' . $language . '"');
         }
 
-        return static::CODE_SUCCESS;
+        return CommandInterface::CODE_SUCCESS;
     }
 
     /**

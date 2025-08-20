@@ -1,1 +1,1 @@
-<?= __('This is a translatable string'); ?>
+<?= __('Hello from TestPlugin') ?>

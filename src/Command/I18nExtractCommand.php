@@ -13,61 +13,41 @@ use Cake\Core\Plugin;
 use Cake\Utility\Hash;
 use Cake\Utility\Inflector;
 
-/**
- * Language string extractor
- */
 class I18nExtractCommand extends CakeI18nExtractCommand
 {
     use I18nModelTrait;
 
-    /**
-     * Default model for storing translation messages.
-     */
     public const DEFAULT_MODEL = 'I18nMessages';
 
-    /**
-     * App languages.
-     *
-     * @var list<string>
-     */
+    /** @var list<string> */
     protected array $_languages = [];
 
-    /**
-     * The name of this command.
-     *
-     * @var string
-     */
-    protected string $name = 'admad/i18n extract';
+    /** @var bool */
+    protected bool $_relativePaths = false;
 
-    /**
-     * Get the command name.
-     *
-     * Returns the command name based on class name.
-     * For e.g. for a command with class name `UpdateTableCommand` the default
-     * name returned would be `'update_table'`.
-     *
-     * @return string
-     */
     public static function defaultName(): string
     {
         return 'admad/i18n extract';
     }
 
-    /**
-     * Execute the command.
-     *
-     * @param \Cake\Console\Arguments $args The command arguments.
-     * @param \Cake\Console\ConsoleIo $io The console io
-     * @return int|null The exit code or null for success
-     */
-    public function execute(Arguments $args, ConsoleIo $io): ?int
+    protected function _getLanguages(Arguments $args): array
+    {
+        $languages = [];
+        if ($args->hasOption('languages') && $args->getOption('languages')) {
+            $languages = explode(',', (string)$args->getOption('languages'));
+        } elseif (Configure::read('I18n.languages')) {
+            $languages = (array)Configure::read('I18n.languages');
+        }
+        return array_map('trim', $languages);
+    }
+
+    public function execute(Arguments $args, ConsoleIo $io): int
     {
         $this->_languages = $this->_getLanguages($args);
         if ($this->_languages === []) {
             $io->err(
                 'You must specify the languages list using the `I18n.languages` config or the `--languages` option.'
             );
-
             return static::CODE_ERROR;
         }
 
@@ -88,7 +68,7 @@ class I18nExtractCommand extends CakeI18nExtractCommand
         }
 
         if ($args->hasOption('extract-core')) {
-            $this->_extractCore = !(strtolower((string)$args->getOption('extract-core')) === 'no');
+            $this->_extractCore = strtolower((string)$args->getOption('extract-core')) !== 'no';
         } else {
             $response = $io->askChoice(
                 'Would you like to extract the messages from the CakePHP core?',
@@ -99,10 +79,6 @@ class I18nExtractCommand extends CakeI18nExtractCommand
         }
 
         if ($args->hasOption('exclude-plugins') && $this->_isExtractingApp()) {
-            /**
-             * @phpstan-ignore-next-line
-             * @psalm-suppress PropertyTypeCoercion
-             */
             $this->_exclude = array_merge($this->_exclude, App::path('plugins'));
         }
 
@@ -111,7 +87,7 @@ class I18nExtractCommand extends CakeI18nExtractCommand
         }
 
         if ($args->hasOption('merge')) {
-            $this->_merge = !(strtolower((string)$args->getOption('merge')) === 'no');
+            $this->_merge = strtolower((string)$args->getOption('merge')) === 'yes';
         } else {
             $io->out();
             $response = $io->askChoice(
@@ -123,8 +99,8 @@ class I18nExtractCommand extends CakeI18nExtractCommand
         }
 
         $this->_markerError = (bool)$args->getOption('marker-error');
+
         if (property_exists($this, '_relativePaths')) {
-            /** @psalm-suppress UndefinedThisPropertyAssignment */
             $this->_relativePaths = (bool)$args->getOption('relative-paths');
         }
 
@@ -132,141 +108,21 @@ class I18nExtractCommand extends CakeI18nExtractCommand
             $this->_searchFiles();
         }
 
+        // Call parent extract method
         $this->_extract($args, $io);
 
         return static::CODE_SUCCESS;
     }
 
     /**
-     * Extract text
+     * Save extracted message to DB
      *
-     * @param \Cake\Console\Arguments $args The Arguments instance
-     * @param \Cake\Console\ConsoleIo $io The io instance
-     * @return void
-     */
-    protected function _extract(Arguments $args, ConsoleIo $io): void
-    {
-        $io->out();
-        $io->out();
-        $io->out('Extracting...');
-        $io->hr();
-        $io->out('Paths:');
-        foreach ($this->_paths as $path) {
-            $io->out('   ' . $path);
-        }
-        $io->hr();
-        $this->_extractTokens($args, $io);
-
-        $this->_saveMessages($args, $io);
-
-        $this->_paths = $this->_files = $this->_storage = [];
-        $this->_translations = $this->_tokens = [];
-        $io->out();
-        if ($this->_countMarkerError) {
-            $io->err("{$this->_countMarkerError} marker error(s) detected.");
-            $io->err(' => Use the --marker-error option to display errors.');
-        }
-
-        $io->out('Done.');
-    }
-
-    /**
-     * Get app languages.
-     *
-     * @param \Cake\Console\Arguments $args The Arguments instance
-     * @return list<string>
-     */
-    protected function _getLanguages(Arguments $args): array
-    {
-        $langs = (string)$args->getOption('languages');
-        if ($langs) {
-            return explode(',', $langs);
-        }
-
-        $langs = Configure::read('I18n.languages', []);
-        if ($langs === []) {
-            return [];
-        }
-
-        $return = [];
-        $langs = Hash::normalize($langs);
-        foreach ($langs as $key => $value) {
-            if (isset($value['locale'])) {
-                $return[] = $value['locale'];
-            } else {
-                $return[] = $key;
-            }
-        }
-
-        return $return;
-    }
-
-    /**
-     * Save translation messages to repository.
-     *
-     * @param \Cake\Console\Arguments $args The Arguments instance
-     * @param \Cake\Console\ConsoleIo $io The io instance
-     * @return void
-     */
-    protected function _saveMessages(Arguments $args, ConsoleIo $io): void
-    {
-        $paths = $this->_paths;
-        /** @psalm-suppress UndefinedConstant */
-        $paths[] = realpath(APP) . DIRECTORY_SEPARATOR;
-
-        usort($paths, function (string $a, string $b): int {
-            return strlen($a) - strlen($b);
-        });
-
-        $domains = [];
-        if ($args->hasOption('domains')) {
-            $domains = explode(',', (string)$args->getOption('domains'));
-        }
-
-        $this->_loadModel($args);
-
-        foreach ($this->_translations as $domain => $translations) {
-            if ($domains && !in_array($domain, $domains)) {
-                continue;
-            }
-            if ($this->_merge) {
-                $domain = 'default';
-            }
-            foreach ($translations as $msgid => $contexts) {
-                foreach ($contexts as $context => $details) {
-                    $references = null;
-                    if (!(bool)$args->getOption('no-location')) {
-                        $files = $details['references'];
-                        $occurrences = [];
-                        foreach ($files as $file => $lines) {
-                            $lines = array_unique($lines);
-                            $occurrences[] = $file . ':' . implode(';', $lines);
-                        }
-                        $occurrences = implode("\n", $occurrences);
-                        $occurrences = str_replace($paths, '', $occurrences);
-                        $references = str_replace(DIRECTORY_SEPARATOR, '/', $occurrences);
-                    }
-
-                    $this->_save(
-                        $domain,
-                        $msgid,
-                        $details['msgid_plural'] === false ? null : $details['msgid_plural'],
-                        $context ?: null,
-                        $references
-                    );
-                }
-            }
-        }
-    }
-
-    /**
-     * Save translation record to repository.
-     *
-     * @param string $domain Domain name
-     * @param string $singular Singular message id.
-     * @param string|null $plural Plural message id.
-     * @param string|null $context Context.
-     * @param string|null $refs Source code references.
+     * @param string $domain
+     * @param string $singular
+     * @param string|null $plural
+     * @param string|null $context
+     * @param string|null $refs
+     * @param ConsoleIo|null $io
      * @return void
      */
     protected function _save(
@@ -274,34 +130,40 @@ class I18nExtractCommand extends CakeI18nExtractCommand
         string $singular,
         ?string $plural = null,
         ?string $context = null,
-        ?string $refs = null
+        ?string $refs = null,
+        ?ConsoleIo $io = null
     ): void {
+        if (!$this->_model) {
+            $this->_model = $this->getTableLocator()->get(static::DEFAULT_MODEL);
+        }
+
         foreach ($this->_languages as $locale) {
-            if (
-                $this->_model->exists(compact('domain', 'locale', 'singular'))
-            ) {
+            $existing = $this->_model->find()
+                ->where(compact('domain', 'locale', 'singular'))
+                ->first();
+
+            if ($existing) {
                 continue;
             }
 
-            $entity = $this->_model->newEntity(compact(
-                'domain',
-                'locale',
-                'singular',
-                'plural',
-                'context',
-                'refs'
-            ), ['guard' => false]);
+            $entity = $this->_model->newEmptyEntity();
+            $entity = $this->_model->patchEntity($entity, [
+                'domain' => $domain,
+                'locale' => $locale,
+                'singular' => $singular,
+                'plural' => $plural,
+                'context' => $context,
+                'value_0' => null,
+                'value_1' => null,
+                'value_2' => null,
+            ]);
 
-            $this->_model->save($entity);
+            if (!$this->_model->save($entity) && $io) {
+                $io->err('Failed to save message: ' . json_encode($entity->getErrors()));
+            }
         }
     }
 
-    /**
-     * Gets the option parser instance and configures it.
-     *
-     * @param \Cake\Console\ConsoleOptionParser $parser The parser to configure
-     * @return \Cake\Console\ConsoleOptionParser
-     */
     public function buildOptionParser(ConsoleOptionParser $parser): ConsoleOptionParser
     {
         $parser->setDescription(
@@ -331,11 +193,9 @@ class I18nExtractCommand extends CakeI18nExtractCommand
             'default' => true,
             'help' => 'Ignores all files in plugins if this command is run inside from the same app directory.',
         ])->addOption('plugin', [
-            'help' => 'Extracts tokens only from the plugin specified and '
-                . 'puts the result in the plugin\'s Locale directory.',
+            'help' => 'Extracts tokens only from the plugin specified and puts the result in the plugin\'s Locale directory.',
         ])->addOption('exclude', [
-            'help' => 'Comma separated list of directories to exclude.' .
-                ' Any path containing a path segment with the provided values will be skipped. E.g. test,vendors',
+            'help' => 'Comma separated list of directories to exclude.',
         ])->addOption('extract-core', [
             'help' => 'Extract messages from the CakePHP core libraries.',
             'choices' => ['yes', 'no'],

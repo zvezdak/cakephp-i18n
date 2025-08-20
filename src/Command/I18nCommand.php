@@ -6,29 +6,11 @@ namespace ADmad\I18n\Command;
 use Cake\Command\Command;
 use Cake\Console\Arguments;
 use Cake\Console\ConsoleIo;
+use Cake\Console\CommandRunner;
 use Cake\Console\ConsoleOptionParser;
 
-/**
- * Command for interactive I18N management.
- */
 class I18nCommand extends Command
 {
-    /**
-     * The name of this command.
-     *
-     * @var string
-     */
-    protected string $name = 'admad/i18n';
-
-    /**
-     * Get the command name.
-     *
-     * Returns the command name based on class name.
-     * For e.g. for a command with class name `UpdateTableCommand` the default
-     * name returned would be `'update_table'`.
-     *
-     * @return string
-     */
     public static function defaultName(): string
     {
         return 'admad/i18n';
@@ -41,7 +23,7 @@ class I18nCommand extends Command
      * @param \Cake\Console\ConsoleIo $io The console io
      * @return int|null The exit code or null for success
      */
-    public function execute(Arguments $args, ConsoleIo $io): ?int
+    public function execute(Arguments $args, ConsoleIo $io): int
     {
         $io->out('<info>I18n Command</info>');
         $io->hr();
@@ -50,28 +32,28 @@ class I18nCommand extends Command
         $io->out('[H]elp');
         $io->out('[Q]uit');
 
+        $runner = new CommandRunner();
+
         do {
             $choice = strtolower($io->askChoice('What would you like to do?', ['E', 'I', 'H', 'Q']));
             $code = null;
+
             switch ($choice) {
                 case 'e':
-                    $code = $this->executeCommand(I18nExtractCommand::class, [], $io);
+                    $code = $runner->run([I18nExtractCommand::defaultName()], null);
                     break;
                 case 'i':
-                    $code = $this->executeCommand(I18nInitCommand::class, [], $io);
+                    $code = $runner->run([I18nInitCommand::defaultName()], null);
                     break;
                 case 'h':
-                    $io->out($this->getOptionParser()->help());
+                    $io->out($this->getOptionParser()->getDescription());
                     break;
                 case 'q':
-                    // Do nothing
                     break;
                 default:
-                    $io->err(
-                        'You have made an invalid selection. ' .
-                        'Please choose a command to execute by entering E, I, H, or Q.'
-                    );
+                    $io->err('Invalid selection. Please choose E, I, H, or Q.');
             }
+
             if ($code === static::CODE_ERROR) {
                 $this->abort();
             }

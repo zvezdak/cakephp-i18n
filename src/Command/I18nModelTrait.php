@@ -26,9 +26,7 @@ trait I18nModelTrait
      */
     protected function _loadModel(Arguments $args): Table
     {
-        /** @var string $model */
-        $model = $args->getOption('model') ?: static::DEFAULT_MODEL;
-
+        $model = $args->getOption('model') ?: (defined('static::DEFAULT_MODEL') ? static::DEFAULT_MODEL : 'I18nMessages');
         return $this->_model = $this->getTableLocator()->get($model);
     }
 }

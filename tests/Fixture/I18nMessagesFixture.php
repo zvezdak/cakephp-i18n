@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 namespace ADmad\I18n\Test\Fixture;
 
 use Cake\TestSuite\Fixture\TestFixture;

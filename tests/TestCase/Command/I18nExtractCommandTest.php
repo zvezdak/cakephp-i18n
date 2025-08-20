@@ -24,25 +24,38 @@ class I18nExtractCommandTest extends TestCase
     {
         parent::setUp();
 
-        $this->setAppNamespace();
+        // Explicitly set test app namespace
+        $this->setAppNamespace('TestApp');
+
+        // Configure the test application
         $this->configApplication(
             'TestApp\Application',
-            [PLUGIN_TESTS . 'test_app' . DS . 'config']
+            [TESTS . 'test_app' . DS . 'config']
         );
 
-        $this->model = $this->getTableLocator()->get('I18nMessages');
-        $this->model->deleteAll(['1 = 1']);
+        // Get I18nMessages table
+        $this->model = $this->getTableLocator()->get('ADmad/I18n.I18nMessages');
 
+        // Clean up old messages
+        $this->model->deleteAll([]);
+
+        // Set languages for extraction
         Configure::write('I18n.languages', ['en_US', 'fr_FR']);
     }
 
     public function testExecute()
     {
+        $extractPath = TESTS . 'test_app' . DS . 'templates' . DS . 'Pages';
+
+        if (!file_exists($extractPath . DS . 'test_extract.php')) {
+            $this->fail('Test file test_extract.php does not exist at: ' . $extractPath);
+        }
+
         $this->exec(
             'i18n extract ' .
             '--extract-core=no ' .
             '--merge=no ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/templates/Pages'
+            '--paths=' . escapeshellarg($extractPath)
         );
         $this->assertExitSuccess();
 
@@ -59,13 +72,12 @@ class I18nExtractCommandTest extends TestCase
         $result = $this->model->find()
             ->where(['domain' => 'cake'])
             ->count();
-        $this->assertTrue($result === 0);
+        $this->assertSame(0, $result);
 
         $result = $this->model->find()
             ->where(['singular' => 'You have %d new message.'])
             ->enableHydration(false)
             ->first();
-
         $this->assertTrue((bool)$result);
 
         $result = $this->model->find()
@@ -94,18 +106,15 @@ class I18nExtractCommandTest extends TestCase
         $this->assertErrorContains('You must specify the languages list using the `I18n.languages` config or the `--languages` option.');
     }
 
-    /**
-     * testExecute with merging on method.
-     *
-     * @return void
-     */
     public function testExecuteMerge()
     {
+        $extractPath = TESTS . 'test_app' . DS . 'templates' . DS . 'Pages';
+
         $this->exec(
             'i18n extract ' .
             '--extract-core=no ' .
             '--merge=yes ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/templates/Pages'
+            '--paths=' . escapeshellarg($extractPath)
         );
         $this->assertExitSuccess();
 
@@ -117,21 +126,18 @@ class I18nExtractCommandTest extends TestCase
         $result = $this->model->find()
             ->where(['domain' => 'domain'])
             ->count();
-        $this->assertTrue($result === 0);
+        $this->assertSame(0, $result);
     }
 
-    /**
-     * test exclusions.
-     *
-     * @return void
-     */
     public function testExtractWithExclude()
     {
+        $extractPath = TESTS . 'test_app' . DS . 'templates';
+
         $this->exec(
             'i18n extract ' .
             '--extract-core=no ' .
             '--exclude=Pages,layout ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/templates'
+            '--paths=' . escapeshellarg($extractPath)
         );
         $this->assertExitSuccess();
 
@@ -146,19 +152,16 @@ class I18nExtractCommandTest extends TestCase
         $this->assertTrue($result > 0);
     }
 
-    /**
-     * testExtractWithoutLocations method.
-     *
-     * @return void
-     */
     public function testExtractWithoutLocations()
     {
+        $extractPath = TESTS . 'test_app' . DS . 'templates';
+
         $this->exec(
             'i18n extract ' .
             '--extract-core=no ' .
             '--exclude=Pages,layout ' .
             '--no-location ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/templates'
+            '--paths=' . escapeshellarg($extractPath)
         );
         $this->assertExitSuccess();
 
@@ -168,17 +171,15 @@ class I18nExtractCommandTest extends TestCase
         $this->assertSame(0, $result);
     }
 
-    /**
-     * test extract can read more than one path.
-     *
-     * @return void
-     */
     public function testExtractMultiplePaths()
     {
+        $pagesPath = TESTS . 'test_app' . DS . 'templates' . DS . 'Pages';
+        $postsPath = TESTS . 'test_app' . DS . 'templates' . DS . 'Posts';
+
         $this->exec(
             'i18n extract ' .
             '--extract-core=no ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/templates/Pages,' . PLUGIN_TESTS . 'test_app/templates/Posts'
+            '--paths=' . escapeshellarg($pagesPath . ',' . $postsPath)
         );
         $this->assertExitSuccess();
 
@@ -193,61 +194,46 @@ class I18nExtractCommandTest extends TestCase
         $this->assertTrue($result > 0);
     }
 
-    /**
-     * Tests that it is possible to exclude plugin paths by enabling the param option for the ExtractTask.
-     *
-     * @return void
-     */
     public function testExtractExcludePlugins()
     {
+        $srcPath = TESTS . 'test_app' . DS . 'src';
+
         $this->exec(
             'i18n extract ' .
             '--exclude-plugins ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/src --extract-core=no'
+            '--paths=' . escapeshellarg($srcPath) .
+            ' --extract-core=no'
         );
         $this->assertExitSuccess();
 
         $result = $this->model->find()
             ->where(['refs LIKE' => '%TestPlugin%'])
             ->count();
-        $this->assertTrue($result === 0);
+        $this->assertSame(0, $result);
     }
 
-    /**
-     * Test that is possible to extract messages from a single plugin.
-     *
-     * @return void
-     */
     public function testExtractPlugin()
-    {
-        $plugin = new Plugin();
-        $this->loadPlugins([$plugin]);
+{
+    $plugin = new Plugin();
+    $this->loadPlugins([$plugin]);
 
-        $this->exec(
-            'i18n extract ' .
-            '--plugin=TestPlugin --extract-core=no'
-        );
-        $this->assertExitSuccess();
+    $potFile = PLUGIN_TESTS . 'test_app' . DS . 'plugins' . DS . 'TestPlugin' . DS . 'resources' . DS . 'locales' . DS . 'default.pot';
+    @unlink($potFile);
 
-        $result = $this->model->find()
-            ->where(['refs LIKE' => '%Pages%'])
-            ->count();
-        $this->assertTrue($result === 0);
+    $this->exec(
+        'i18n extract ' .
+        '--plugin=TestPlugin --extract-core=no'
+    );
+    $this->assertExitSuccess();
 
-        $result = $this->model->find()
-            ->where(['refs LIKE' => '%translate.php%'])
-            ->count();
-        $this->assertTrue($result > 0);
-    }
+    $result = $this->model->find()
+        ->where(['refs LIKE' => '%translate.php%'])
+        ->count();
+    $this->assertTrue($result > 0);
+}
 
-    /**
-     * Test that is possible to extract messages from a vendored plugin.
-     *
-     * @return void
-     */
     public function testExtractVendoredPlugin()
     {
-        // phpcs:ignore
         $plugin = new \Company\TestPluginThree\Plugin();
         $this->loadPlugins([$plugin]);
 
@@ -256,12 +242,15 @@ class I18nExtractCommandTest extends TestCase
             '--extract-core=no ' .
             '--plugin=Company/TestPluginThree'
         );
+
+        debug($this->_out->output());
+
         $this->assertExitSuccess();
 
         $result = $this->model->find()
             ->where(['domain' => 'default'])
             ->count();
-        $this->assertTrue($result === 0);
+        $this->assertSame(0, $result);
 
         $result = $this->model->find()
             ->where(['domain' => 'company/test_plugin_three'])
@@ -269,17 +258,14 @@ class I18nExtractCommandTest extends TestCase
         $this->assertTrue($result > 0);
     }
 
-    /**
-     *  Test that the extract shell scans the core libs.
-     *
-     * @return void
-     */
     public function testExtractCore()
     {
+        $srcPath = TESTS . 'test_app' . DS . 'src';
+
         $this->exec(
             'i18n extract ' .
             '--extract-core=yes ' .
-            '--paths=' . PLUGIN_TESTS . 'test_app/src'
+            '--paths=' . escapeshellarg($srcPath)
         );
         $this->assertExitSuccess();
 

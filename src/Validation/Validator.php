@@ -49,7 +49,7 @@ class Validator extends CakeValidator
         $this->getProvider('default');
 
         foreach ($rules as $name => $rule) {
-            $result = $rule->process($data[$field], $this->_providers, compact('newRecord', 'data', 'field'));
+            $result = $rule->process($data[$field] ?? null, $this->_providers, compact('newRecord', 'data', 'field'));
             if ($result === true) {
                 continue;
             }

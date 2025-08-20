@@ -93,7 +93,7 @@ class DbMessagesLoader
 
         $results = $query
             ->where(['domain' => $this->_domain, 'locale' => $this->_locale])
-            ->disableHydration()
+            ->disableHydration(true)
             ->all();
 
         return new Package($this->_formatter, null, $this->_messages($results));
