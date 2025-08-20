@@ -1,6 +1,6 @@
 {
-    "name": "admad/cakephp-i18n",
-    "description": "A CakePHP plugin for I18n related tools.",
+    "name": "zvezda/cakephp-i18n",
+    "description": "A CakePHP5 plugin for I18n related tools.",
     "type": "cakephp-plugin",
     "keywords": [
         "cakephp",
@@ -10,7 +10,16 @@
         "routing"
     ],
     "homepage": "https://github.com/ADmad/cakephp-i18n",
+    "support": {
+        "source": "https://github.com/zvezda/cakephp-i18n",
+        "issues": "https://github.com/zvezda/cakephp-i18n/issues"
+    },
     "authors": [
+        {
+            "name":"Zvezda Kirilova",
+            "role":"Maintainer",
+            "homepage":"https://github.com/zvezda"
+        },
         {
             "name":"ADmad",
             "role":"Author",
@@ -18,13 +27,9 @@
         }
     ],
     "license": "MIT",
-    "support": {
-        "source":"https://github.com/ADmad/cakephp-i18n",
-        "issues":"https://github.com/ADmad/cakephp-i18n/issues"
-    },
     "require": {
         "php": ">=8.1",
-        "cakephp/cakephp": "5.2.6"
+        "cakephp/cakephp": "^5.0"
     },
     "require-dev": {
         "cakephp/upgrade": "5.x-dev",
